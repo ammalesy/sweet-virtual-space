@@ -67,14 +67,21 @@ io.on('connection', (socket) => {
 
   // Join room
   socket.on('join-room', ({ roomId, userName }) => {
+    console.log(`\n=== JOIN ROOM EVENT ===`);
+    console.log(`Socket ID: ${socket.id}`);
+    console.log(`Room: ${roomId}`);
+    console.log(`Username: ${userName}`);
+    console.log(`Current room: ${socket.currentRoomId}`);
+    
     // Prevent duplicate joins from same socket
     if (socket.currentRoomId === roomId) {
-      console.log(`Socket ${socket.id} already in room ${roomId}, ignoring duplicate join`);
+      console.log(`❌ Socket ${socket.id} already in room ${roomId}, ignoring duplicate join`);
       return;
     }
 
     // Leave previous room if exists
     if (socket.currentRoomId) {
+      console.log(`🚪 Leaving previous room: ${socket.currentRoomId}`);
       const prevRoom = rooms.get(socket.currentRoomId);
       if (prevRoom && prevRoom.has(socket.id)) {
         prevRoom.delete(socket.id);
@@ -92,13 +99,18 @@ io.on('connection', (socket) => {
 
     // Initialize room if it doesn't exist
     if (!rooms.has(roomId)) {
+      console.log(`🏠 Creating new room: ${roomId}`);
       rooms.set(roomId, new Map());
     }
 
     const room = rooms.get(roomId);
     
+    // Log current room state before adding user
+    console.log(`📊 Room ${roomId} before adding user:`, Array.from(room.keys()));
+    
     // Remove any existing user with same socket ID (reconnection case)
     if (room.has(socket.id)) {
+      console.log(`♻️ Removing existing user with same socket ID`);
       room.delete(socket.id);
     }
 
@@ -110,17 +122,21 @@ io.on('connection', (socket) => {
 
     // Get current users in room as array
     const roomUsers = Array.from(room.values());
+    console.log(`📊 Room ${roomId} after adding user:`, roomUsers.map(u => u.userName));
 
     // Send user list to new user
     socket.emit('user-list', roomUsers);
+    console.log(`📤 Sent user list to ${userName}:`, roomUsers.length, 'users');
 
     // Notify others about new user
     socket.to(roomId).emit('user-joined', {
       id: socket.id,
       userName: userName
     });
+    console.log(`📢 Notified others about ${userName} joining`);
 
-    console.log(`${userName} joined room ${roomId}. Total users: ${roomUsers.length}`);
+    console.log(`✅ ${userName} joined room ${roomId}. Total users: ${roomUsers.length}`);
+    console.log(`=== END JOIN ROOM EVENT ===\n`);
   });
 
   // WebRTC signaling

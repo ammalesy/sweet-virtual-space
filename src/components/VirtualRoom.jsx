@@ -272,6 +272,9 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       setIsConnecting(true)
       setConnectionError(null)
 
+      // Clear any existing users before connecting
+      setConnectedUsers([])
+
       // Request user interaction for audio playback (required by browsers)
       await requestAudioPermission()
 
@@ -286,10 +289,8 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         upgrade: false, // Disable WebSocket upgrade for Railway
         withCredentials: false,
         autoConnect: true,
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 2000,
-        maxReconnectionAttempts: 5
+        reconnection: false, // Disable auto-reconnection to prevent duplicates
+        reconnectionAttempts: 0
       })
       
       // Set up timeout to fallback to demo mode
