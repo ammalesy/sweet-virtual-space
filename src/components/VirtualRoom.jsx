@@ -769,11 +769,34 @@ function VirtualRoom({ roomId, userName, onLeave }) {
                 }}
               >
                 <div className="flex flex-col items-center">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl ${
-                    isMe ? 'bg-green-600' : 'bg-blue-600'
-                  } ${!isMuted && streamRef.current ? 'ring-4 ring-green-400 animate-pulse' : ''}`}>
-                    👤
+                  <div className="relative">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl ${
+                      isMe ? 'bg-green-600' : 'bg-blue-600'
+                    } ${!isMuted && streamRef.current ? 'ring-4 ring-green-400 animate-pulse' : ''}`}>
+                      👤
+                    </div>
+                    
+                    {/* Reload WebRTC Button - Only show for current user */}
+                    {isMe && (
+                      <button
+                        onClick={reloadWebRTCConnection}
+                        className={`absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all ${
+                          isReloading
+                            ? 'bg-orange-500 cursor-wait animate-spin'
+                            : 'bg-blue-500 hover:bg-blue-600 hover:scale-110'
+                        }`}
+                        disabled={isReloading}
+                        title="รีโหลดการเชื่อมต่อ WebRTC"
+                      >
+                        {isReloading ? (
+                          <div className="w-3 h-3 border border-white border-t-transparent rounded-full"></div>
+                        ) : (
+                          '🔄'
+                        )}
+                      </button>
+                    )}
                   </div>
+                  
                   <div className="mt-2 bg-black bg-opacity-50 px-2 py-1 rounded text-sm">
                     {user.userName}
                     {isMe && (
@@ -812,52 +835,18 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         <button
           onClick={toggleMute}
           className={`px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
-            isWebRTCConnecting
-              ? 'bg-yellow-600 hover:bg-yellow-700 cursor-wait'
-              : isMuted 
-                ? 'bg-red-600 hover:bg-red-700' 
-                : 'bg-green-600 hover:bg-green-700'
+            isMuted 
+              ? 'bg-red-600 hover:bg-red-700' 
+              : 'bg-green-600 hover:bg-green-700'
           }`}
-          disabled={!streamRef.current || isWebRTCConnecting}
+          disabled={!streamRef.current}
         >
-          {isWebRTCConnecting ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-              <span>กำลังเชื่อมต่อ WebRTC...</span>
-            </>
-          ) : (
-            <>
-              <span className="text-xl">
-                {isMuted ? '🔇' : '🎤'}
-              </span>
-              <span>
-                {isMuted ? 'เปิดไมค์' : 'ปิดไมค์'}
-              </span>
-            </>
-          )}
-        </button>
-
-        <button
-          onClick={reloadWebRTCConnection}
-          className={`px-4 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
-            isReloading
-              ? 'bg-orange-600 cursor-wait'
-              : 'bg-blue-600 hover:bg-blue-700'
-          }`}
-          disabled={isReloading}
-          title="รีโหลดการเชื่อมต่อ WebRTC"
-        >
-          {isReloading ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-              <span className="text-sm">รีโหลด...</span>
-            </>
-          ) : (
-            <>
-              <span className="text-lg">🔄</span>
-              <span className="text-sm">รีโหลด WebRTC</span>
-            </>
-          )}
+          <span className="text-xl">
+            {isMuted ? '🔇' : '🎤'}
+          </span>
+          <span>
+            {isMuted ? 'เปิดไมค์' : 'ปิดไมค์'}
+          </span>
         </button>
 
         <div className="bg-gray-700 px-4 py-3 rounded-lg flex items-center space-x-2">
@@ -865,11 +854,6 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           <span className="text-sm">
             {socketConnected ? `เชื่อมต่อ: ${connectedUsers.length} คน` : 'Demo Mode'}
           </span>
-          {isWebRTCConnecting && (
-            <span className="text-xs text-yellow-400 ml-2">
-              (กำลังเชื่อมต่อเสียง...)
-            </span>
-          )}
         </div>
       </div>
     </div>
