@@ -497,10 +497,12 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       }
       
       setConnectedUsers(prev => {
-        // Check if user already exists
-        const userExists = prev.find(u => u.id === user.id);
-        if (userExists) {
-          console.log('User already exists, ignoring join event');
+        // Check if user already exists by both ID and username
+        const userExistsById = prev.find(u => u.id === user.id);
+        const userExistsByName = prev.find(u => u.userName === user.userName);
+        
+        if (userExistsById || userExistsByName) {
+          console.log('User already exists (by ID or name), ignoring join event');
           return prev;
         }
         
