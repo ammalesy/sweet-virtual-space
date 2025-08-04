@@ -61,25 +61,37 @@ function VirtualRoom({ roomId, userName, onLeave }) {
 
   const createPeerConnection = async (userId, userName, isInitiator) => {
     try {
+      console.log(`🔄 Creating peer connection with ${userName} (initiator: ${isInitiator})`)
+      
       // Use native WebRTC instead of simple-peer
       const peerConnection = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun.googleapis.com:19302' }
         ]
       })
 
       // Add local stream tracks
       if (streamRef.current) {
+        console.log(`📤 Adding local stream tracks to peer ${userName}`)
         streamRef.current.getTracks().forEach(track => {
+          console.log(`Adding track: ${track.kind}, enabled: ${track.enabled}`)
           peerConnection.addTrack(track, streamRef.current)
         })
+      } else {
+        console.error('❌ No local stream available when creating peer connection')
       }
 
       // Handle incoming remote stream
       peerConnection.ontrack = (event) => {
         const [remoteStream] = event.streams
-        console.log(`🔊 เชื่อมต่อเสียงกับ ${userName} สำเร็จ`)
+        console.log(`🔊 เชื่อมต่อเสียงกับ ${userName} สำเร็จ - Stream tracks:`, remoteStream.getTracks().length)
+        
+        // Log track details
+        remoteStream.getTracks().forEach(track => {
+          console.log(`Remote track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`)
+        })
         
         // Create audio element for remote stream
         const audio = document.createElement('audio')
@@ -87,10 +99,31 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         audio.autoplay = true
         audio.volume = 1.0
         audio.controls = false
+        audio.playsInline = true // Important for mobile
+        
+        // Add event listeners for debugging
+        audio.addEventListener('loadedmetadata', () => {
+          console.log(`📻 Audio metadata loaded for ${userName}`)
+        })
+        
+        audio.addEventListener('play', () => {
+          console.log(`▶️ Audio playing for ${userName}`)
+        })
+        
+        audio.addEventListener('error', (e) => {
+          console.error(`❌ Audio error for ${userName}:`, e)
+        })
         
         // Add to DOM (hidden)
         audio.style.display = 'none'
         document.body.appendChild(audio)
+        
+        // Force play (required for some browsers)
+        audio.play().then(() => {
+          console.log(`✅ Successfully started playing audio from ${userName}`)
+        }).catch(error => {
+          console.error(`❌ Failed to play audio from ${userName}:`, error)
+        })
         
         remoteAudiosRef.current.set(userId, audio)
         setPeersConnected(prev => new Map(prev).set(userId, true))
@@ -99,6 +132,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       // Handle ICE candidates
       peerConnection.onicecandidate = (event) => {
         if (event.candidate && socketRef.current) {
+          console.log(`🧊 Sending ICE candidate to ${userName}`)
           socketRef.current.emit('webrtc-signal', {
             userId: userId,
             roomId: roomId,
@@ -107,11 +141,15 @@ function VirtualRoom({ roomId, userName, onLeave }) {
               candidate: event.candidate
             }
           })
+        } else if (!event.candidate) {
+          console.log(`🏁 ICE gathering complete for ${userName}`)
         }
       }
 
       // Handle connection state changes
       peerConnection.onconnectionstatechange = () => {
+        console.log(`🔗 Connection state with ${userName}: ${peerConnection.connectionState}`)
+        
         if (peerConnection.connectionState === 'connected') {
           console.log(`✅ WebRTC เชื่อมต่อกับ ${userName} สำเร็จ`)
         } else if (peerConnection.connectionState === 'disconnected') {
@@ -129,12 +167,23 @@ function VirtualRoom({ roomId, userName, onLeave }) {
             updated.delete(userId)
             return updated
           })
+        } else if (peerConnection.connectionState === 'failed') {
+          console.error(`❌ WebRTC connection failed with ${userName}`)
         }
+      }
+
+      // Handle ICE connection state changes
+      peerConnection.oniceconnectionstatechange = () => {
+        console.log(`❄️ ICE connection state with ${userName}: ${peerConnection.iceConnectionState}`)
       }
 
       // Create offer or wait for offer
       if (isInitiator) {
-        const offer = await peerConnection.createOffer()
+        console.log(`📞 Creating offer for ${userName}`)
+        const offer = await peerConnection.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false
+        })
         await peerConnection.setLocalDescription(offer)
         
         if (socketRef.current) {
@@ -150,6 +199,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       }
 
       peersRef.current.set(userId, peerConnection)
+      console.log(`✅ Peer connection created with ${userName}`)
       
     } catch (error) {
       console.error('Failed to create peer connection:', error)
@@ -371,15 +421,26 @@ function VirtualRoom({ roomId, userName, onLeave }) {
 
     // WebRTC signaling
     socket.on('webrtc-signal', async ({ userId, signal }) => {
+      console.log(`📡 Received WebRTC signal from ${userId}:`, signal.type)
+      
       const peerConnection = peersRef.current.get(userId)
-      if (!peerConnection) return
+      if (!peerConnection) {
+        console.error(`❌ No peer connection found for user ${userId}`)
+        return
+      }
 
       try {
         if (signal.type === 'offer') {
+          console.log(`📨 Processing offer from ${userId}`)
           await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp))
-          const answer = await peerConnection.createAnswer()
+          
+          const answer = await peerConnection.createAnswer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false
+          })
           await peerConnection.setLocalDescription(answer)
           
+          console.log(`📤 Sending answer to ${userId}`)
           socket.emit('webrtc-signal', {
             userId: userId,
             roomId: roomId,
@@ -389,12 +450,14 @@ function VirtualRoom({ roomId, userName, onLeave }) {
             }
           })
         } else if (signal.type === 'answer') {
+          console.log(`📨 Processing answer from ${userId}`)
           await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp))
         } else if (signal.type === 'ice-candidate') {
+          console.log(`🧊 Processing ICE candidate from ${userId}`)
           await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate))
         }
       } catch (error) {
-        console.error('WebRTC signaling error:', error)
+        console.error(`❌ WebRTC signaling error with ${userId}:`, error)
       }
     })
   }
