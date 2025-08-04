@@ -74,13 +74,20 @@ io.on('connection', (socket) => {
     console.log(`Current room: ${socket.currentRoomId}`);
     
     // Prevent duplicate joins from same socket
-    if (socket.currentRoomId === roomId) {
-      console.log(`❌ Socket ${socket.id} already in room ${roomId}, ignoring duplicate join`);
+    if (socket.currentRoomId === roomId && socket.userName === userName) {
+      console.log(`❌ Socket ${socket.id} already in room ${roomId} with same username, ignoring duplicate join`);
+      
+      // Still send current user list to avoid confusion
+      const room = rooms.get(roomId);
+      if (room) {
+        const roomUsers = Array.from(room.values());
+        socket.emit('user-list', roomUsers);
+      }
       return;
     }
 
     // Leave previous room if exists
-    if (socket.currentRoomId) {
+    if (socket.currentRoomId && rooms.has(socket.currentRoomId)) {
       console.log(`🚪 Leaving previous room: ${socket.currentRoomId}`);
       const prevRoom = rooms.get(socket.currentRoomId);
       if (prevRoom && prevRoom.has(socket.id)) {
@@ -92,10 +99,11 @@ io.on('connection', (socket) => {
       }
     }
 
+    // Join the new room
     socket.join(roomId);
     socket.userName = userName;
     socket.roomId = roomId;
-    socket.currentRoomId = roomId; // Track current room
+    socket.currentRoomId = roomId;
 
     // Initialize room if it doesn't exist
     if (!rooms.has(roomId)) {
@@ -114,28 +122,43 @@ io.on('connection', (socket) => {
       room.delete(socket.id);
     }
 
+    // Double check: remove any users with same username (edge case)
+    const existingUserWithSameName = Array.from(room.entries()).find(([id, user]) => 
+      user.userName === userName && id !== socket.id
+    );
+    if (existingUserWithSameName) {
+      console.log(`♻️ Removing duplicate username: ${userName}`);
+      room.delete(existingUserWithSameName[0]);
+    }
+
     // Add user to room
     room.set(socket.id, {
       id: socket.id,
       userName: userName
     });
 
-    // Get current users in room as array
+    // Get current users in room as array and ensure no duplicates
     const roomUsers = Array.from(room.values());
-    console.log(`📊 Room ${roomId} after adding user:`, roomUsers.map(u => u.userName));
+    
+    // Final deduplication by username as safety measure
+    const uniqueUsers = roomUsers.filter((user, index, arr) => 
+      arr.findIndex(u => u.userName === user.userName) === index
+    );
+    
+    console.log(`📊 Room ${roomId} after adding user:`, uniqueUsers.map(u => u.userName));
 
     // Send user list to new user
-    socket.emit('user-list', roomUsers);
-    console.log(`📤 Sent user list to ${userName}:`, roomUsers.length, 'users');
+    socket.emit('user-list', uniqueUsers);
+    console.log(`📤 Sent user list to ${userName}:`, uniqueUsers.length, 'users');
 
-    // Notify others about new user
+    // Notify others about new user (only if not already in room)
     socket.to(roomId).emit('user-joined', {
       id: socket.id,
       userName: userName
     });
     console.log(`📢 Notified others about ${userName} joining`);
 
-    console.log(`✅ ${userName} joined room ${roomId}. Total users: ${roomUsers.length}`);
+    console.log(`✅ ${userName} joined room ${roomId}. Total users: ${uniqueUsers.length}`);
     console.log(`=== END JOIN ROOM EVENT ===\n`);
   });
 
