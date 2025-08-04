@@ -1,0 +1,111 @@
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+
+const app = express();
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"]
+  }
+});
+
+app.use(cors());
+
+// Store room information
+const rooms = new Map();
+
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  // Join room
+  socket.on('join-room', ({ roomId, userName }) => {
+    socket.join(roomId);
+    socket.userName = userName;
+    socket.roomId = roomId;
+
+    // Initialize room if it doesn't exist
+    if (!rooms.has(roomId)) {
+      rooms.set(roomId, new Set());
+    }
+
+    // Add user to room
+    rooms.get(roomId).add({
+      id: socket.id,
+      userName: userName
+    });
+
+    // Get current users in room
+    const roomUsers = Array.from(rooms.get(roomId));
+
+    // Send user list to new user
+    socket.emit('user-list', roomUsers);
+
+    // Notify others about new user
+    socket.to(roomId).emit('user-joined', {
+      id: socket.id,
+      userName: userName
+    });
+
+    console.log(`${userName} joined room ${roomId}`);
+  });
+
+  // Chat message
+  socket.on('chat-message', ({ roomId, message }) => {
+    io.to(roomId).emit('chat-message', {
+      id: Date.now() + Math.random(),
+      sender: socket.userName,
+      message: message,
+      timestamp: new Date().toLocaleTimeString('th-TH')
+    });
+  });
+
+  // WebRTC signaling
+  socket.on('webrtc-signal', ({ userId, roomId, signal }) => {
+    socket.to(userId).emit('webrtc-signal', {
+      userId: socket.id,
+      signal: signal
+    });
+  });
+
+  // Mute/unmute status
+  socket.on('mute-status', ({ roomId, isMuted }) => {
+    socket.to(roomId).emit('user-mute-status', {
+      userId: socket.id,
+      userName: socket.userName,
+      isMuted: isMuted
+    });
+  });
+
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+
+    if (socket.roomId && rooms.has(socket.roomId)) {
+      const roomUsers = rooms.get(socket.roomId);
+      roomUsers.forEach(user => {
+        if (user.id === socket.id) {
+          roomUsers.delete(user);
+        }
+      });
+
+      // Notify others about user leaving
+      socket.to(socket.roomId).emit('user-left', {
+        id: socket.id,
+        userName: socket.userName
+      });
+
+      // Clean up empty rooms
+      if (roomUsers.size === 0) {
+        rooms.delete(socket.roomId);
+      }
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
