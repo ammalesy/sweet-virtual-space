@@ -456,12 +456,17 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     socket.on('user-list', (users) => {
       console.log('Received user list:', users);
       
-      // Set users directly without filtering since server now handles duplicates
-      setConnectedUsers(users);
-      console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${users.length} คน`);
+      // Use Set to ensure unique users by ID, then convert back to array
+      const uniqueUsers = Array.from(
+        new Map(users.map(user => [user.id, user])).values()
+      );
+      
+      console.log('Unique users after dedup:', uniqueUsers);
+      setConnectedUsers(uniqueUsers);
+      console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`);
       
       // Create peer connections for existing users (excluding self)
-      users.forEach(user => {
+      uniqueUsers.forEach(user => {
         if (user.id !== socket.id && streamRef.current) {
           createPeerConnection(user.id, user.userName, true)
         }
@@ -469,22 +474,23 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     })
 
     socket.on('user-joined', (user) => {
-      console.log('User joined:', user);
+      console.log('User joined event received:', user);
       
       setConnectedUsers(prev => {
-        // Double check to prevent duplicates on client side
-        const userExists = prev.find(u => u.id === user.id);
-        if (userExists) {
-          console.log('User already exists in list, skipping');
-          return prev;
-        }
+        // Create a Map to remove duplicates by user ID
+        const userMap = new Map(prev.map(u => [u.id, u]));
         
-        console.log(`${user.userName} เข้าร่วมห้อง`);
-        return [...prev, user];
+        // Add the new user (will overwrite if duplicate ID exists)
+        userMap.set(user.id, user);
+        
+        const newUsers = Array.from(userMap.values());
+        console.log('Updated user list:', newUsers.map(u => `${u.userName}(${u.id})`));
+        
+        return newUsers;
       });
       
       // Create peer connection for new user (as receiver)
-      if (streamRef.current) {
+      if (streamRef.current && user.id !== socket.id) {
         createPeerConnection(user.id, user.userName, false)
       }
     })
