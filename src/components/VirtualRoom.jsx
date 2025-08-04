@@ -61,6 +61,12 @@ function VirtualRoom({ roomId, userName, onLeave }) {
 
   const createPeerConnection = async (userId, userName, isInitiator) => {
     try {
+      // Check if peer connection already exists
+      if (peersRef.current.has(userId)) {
+        console.log(`⚠️ Peer connection with ${userName} already exists, skipping`)
+        return
+      }
+
       console.log(`🔄 Creating peer connection with ${userName} (initiator: ${isInitiator})`)
       
       // Use native WebRTC instead of simple-peer
@@ -71,6 +77,9 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           { urls: 'stun:stun.googleapis.com:19302' }
         ]
       })
+
+      // Store peer connection immediately to prevent race conditions
+      peersRef.current.set(userId, peerConnection)
 
       // Add local stream tracks
       if (streamRef.current) {
@@ -198,12 +207,16 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         }
       }
 
-      peersRef.current.set(userId, peerConnection)
       console.log(`✅ Peer connection created with ${userName}`)
       
     } catch (error) {
       console.error('Failed to create peer connection:', error)
       console.log('❌ ไม่สามารถสร้างการเชื่อมต่อเสียงได้')
+      
+      // Clean up on error
+      if (peersRef.current.has(userId)) {
+        peersRef.current.delete(userId)
+      }
     }
   }
 
@@ -450,8 +463,17 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       }
 
       try {
+        console.log(`🔍 Current signaling state: ${peerConnection.signalingState}`)
+        
         if (signal.type === 'offer') {
           console.log(`📨 Processing offer from ${userId}`)
+          
+          // Check if we can accept the offer
+          if (peerConnection.signalingState !== 'stable' && peerConnection.signalingState !== 'have-local-offer') {
+            console.warn(`⚠️ Ignoring offer in state: ${peerConnection.signalingState}`)
+            return
+          }
+          
           await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp))
           
           const answer = await peerConnection.createAnswer({
@@ -471,10 +493,23 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           })
         } else if (signal.type === 'answer') {
           console.log(`📨 Processing answer from ${userId}`)
+          
+          // Check if we can accept the answer
+          if (peerConnection.signalingState !== 'have-local-offer') {
+            console.warn(`⚠️ Ignoring answer in state: ${peerConnection.signalingState}`)
+            return
+          }
+          
           await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp))
         } else if (signal.type === 'ice-candidate') {
           console.log(`🧊 Processing ICE candidate from ${userId}`)
-          await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate))
+          
+          // Only add ICE candidates if we have remote description
+          if (peerConnection.remoteDescription) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate))
+          } else {
+            console.log(`⏳ Queuing ICE candidate for ${userId} (no remote description yet)`)
+          }
         }
       } catch (error) {
         console.error(`❌ WebRTC signaling error with ${userId}:`, error)
