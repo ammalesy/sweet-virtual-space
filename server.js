@@ -14,10 +14,9 @@ const io = new Server(server, {
     credentials: true
   },
   allowEIO3: true,
-  transports: ['polling', 'websocket'], // Try polling first, then websocket
+  transports: ['polling'], // Use only polling for Railway compatibility
   pingTimeout: 60000,
   pingInterval: 25000,
-  upgradeTimeout: 30000,
   maxHttpBufferSize: 1e6
 });
 

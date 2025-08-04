@@ -168,18 +168,18 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       // Try to load socket.io dynamically
       const io = await import('socket.io-client').then(module => module.default || module)
       
-      // Initialize socket connection with Railway-optimized configuration
+      // Initialize socket connection with Railway-optimized configuration (polling only)
       socketRef.current = io('https://sweet-virtual-space-production.up.railway.app', {
         timeout: 15000,
         forceNew: true,
-        transports: ['polling', 'websocket'], // Start with polling, then upgrade
-        upgrade: true,
-        rememberUpgrade: false, // Don't remember upgrade for Railway
-        withCredentials: false, // Set to false for Railway
+        transports: ['polling'], // Use only polling for Railway
+        upgrade: false, // Disable WebSocket upgrade for Railway
+        withCredentials: false,
         autoConnect: true,
         reconnection: true,
-        reconnectionAttempts: 3,
-        reconnectionDelay: 1000
+        reconnectionAttempts: 5,
+        reconnectionDelay: 2000,
+        maxReconnectionAttempts: 5
       })
       
       // Set up timeout to fallback to demo mode
@@ -189,7 +189,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           setConnectionError('เซิร์ฟเวอร์ใช้เวลานานเกินไป - ใช้โหมด Demo')
           initializeMockRoom()
         }
-      }, 20000) // Increased timeout for Railway
+      }, 20000)
 
       setupSocketListeners(connectionTimeout)
       
