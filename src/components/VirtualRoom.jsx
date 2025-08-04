@@ -168,38 +168,37 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       // Try to load socket.io dynamically
       const io = await import('socket.io-client').then(module => module.default || module)
       
-      // Initialize socket connection with Railway URL and better configuration
+      // Initialize socket connection with Railway-optimized configuration
       socketRef.current = io('https://sweet-virtual-space-production.up.railway.app', {
-        timeout: 10000,
+        timeout: 15000,
         forceNew: true,
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'], // Start with polling, then upgrade
         upgrade: true,
-        rememberUpgrade: true,
-        withCredentials: true
+        rememberUpgrade: false, // Don't remember upgrade for Railway
+        withCredentials: false, // Set to false for Railway
+        autoConnect: true,
+        reconnection: true,
+        reconnectionAttempts: 3,
+        reconnectionDelay: 1000
       })
       
       // Set up timeout to fallback to demo mode
       const connectionTimeout = setTimeout(() => {
         if (!socketConnected) {
-          console.log('Server not available, switching to Demo Mode')
-          setConnectionError('เซิร์ฟเวอร์ไม่พร้อมใช้งาน - ใช้โหมด Demo')
+          console.log('Server connection timeout, switching to Demo Mode')
+          setConnectionError('เซิร์ฟเวอร์ใช้เวลานานเกินไป - ใช้โหมด Demo')
           initializeMockRoom()
         }
-      }, 12000)
+      }, 20000) // Increased timeout for Railway
 
       setupSocketListeners(connectionTimeout)
       
       // Try to get user media with detailed error handling
       await initializeMicrophone()
       
-      // Join room after connection is established
-      if (socketRef.current) {
-        socketRef.current.emit('join-room', { roomId, userName })
-      }
-      
     } catch (error) {
       console.log('Initializing Demo Mode due to connection issue:', error)
-      setConnectionError('เซิร์ฟเวอร์ไม่พร้อมใช้งาน - ใช้โหมด Demo')
+      setConnectionError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ - ใช้โหมด Demo')
       initializeMockRoom()
     }
     
@@ -299,6 +298,9 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       setConnectionError(null)
       console.log('✅ Connected to WebSocket server')
       addChatMessage('System', '🟢 เชื่อมต่อ WebSocket server สำเร็จ!')
+      
+      // Join room after successful connection
+      socket.emit('join-room', { roomId, userName })
     })
 
     socket.on('disconnect', () => {
@@ -396,7 +398,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         } else if (signal.type === 'answer') {
           await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp))
         } else if (signal.type === 'ice-candidate') {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate))
+          await peerConnection.addIceCandidate(new RTCiceCandidate(signal.candidate))
         }
       } catch (error) {
         console.error('WebRTC signaling error:', error)

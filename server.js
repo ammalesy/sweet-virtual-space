@@ -6,31 +6,58 @@ import cors from 'cors';
 const app = express();
 const server = createServer(app);
 
-// Configure Socket.IO with better settings for Railway
+// Configure Socket.IO with Railway-specific settings
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for now
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true
   },
   allowEIO3: true,
-  transports: ['websocket', 'polling']
+  transports: ['polling', 'websocket'], // Try polling first, then websocket
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  upgradeTimeout: 30000,
+  maxHttpBufferSize: 1e6
 });
 
 // Configure CORS for Express
 app.use(cors({
-  origin: "*", // Allow all origins for now
+  origin: "*",
   credentials: true
 }));
 
+// Railway needs this middleware to handle WebSocket upgrades properly
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
 // Add health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    transport: 'socket.io ready',
+    uptime: process.uptime()
+  });
 });
 
 // Basic route for testing
 app.get('/', (req, res) => {
-  res.json({ message: 'Virtual Space Server is running!', timestamp: new Date().toISOString() });
+  res.json({ 
+    message: 'Virtual Space Server is running!', 
+    timestamp: new Date().toISOString(),
+    socketio: 'ready',
+    transports: ['polling', 'websocket']
+  });
 });
 
 // Store room information
