@@ -9,6 +9,9 @@ function VirtualRoom({ roomId, userName, onLeave }) {
   const [microphoneStatus, setMicrophoneStatus] = useState('requesting')
   const [audioLevel, setAudioLevel] = useState(0)
   const [peersConnected, setPeersConnected] = useState(new Map())
+  const [isWebRTCConnecting, setIsWebRTCConnecting] = useState(false)
+  const [hasConnectedPeers, setHasConnectedPeers] = useState(false)
+  const [isReloading, setIsReloading] = useState(false)
   
   const socketRef = useRef()
   const streamRef = useRef()
@@ -176,6 +179,20 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         
         if (peerConnection.connectionState === 'connected') {
           console.log(`✅ WebRTC เชื่อมต่อกับ ${userName} สำเร็จ`)
+          setPeersConnected(prev => new Map(prev).set(userId, true))
+          
+          // Check if all expected peers are connected
+          setTimeout(() => {
+            const totalExpectedPeers = connectedUsers.length - 1; // Exclude self
+            const connectedPeersCount = Array.from(peersRef.current.values()).filter(
+              peer => peer.connectionState === 'connected'
+            ).length;
+            
+            if (connectedPeersCount === totalExpectedPeers && totalExpectedPeers > 0) {
+              setIsWebRTCConnecting(false);
+              setHasConnectedPeers(true);
+            }
+          }, 500);
         } else if (peerConnection.connectionState === 'disconnected') {
           console.log(`🔇 ขาดการเชื่อมต่อกับ ${userName}`)
           
@@ -479,6 +496,12 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       setConnectedUsers(uniqueUsers);
       console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`);
       
+      // Set WebRTC connecting state if there are other users
+      const otherUsers = uniqueUsers.filter(user => user.id !== socket.id);
+      if (otherUsers.length > 0 && streamRef.current) {
+        setIsWebRTCConnecting(true);
+      }
+      
       // Create peer connections for existing users (excluding self)
       uniqueUsers.forEach(user => {
         if (user.id !== socket.id && streamRef.current && !peersRef.current.has(user.id)) {
@@ -511,6 +534,11 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         
         return newUsers;
       });
+      
+      // Set WebRTC connecting state when new user joins
+      if (streamRef.current) {
+        setIsWebRTCConnecting(true);
+      }
       
       // Create peer connection for new user (as receiver) only if not exists
       if (streamRef.current && !peersRef.current.has(user.id)) {
@@ -624,6 +652,65 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     onLeave()
   }
 
+  const reloadWebRTCConnection = async () => {
+    try {
+      setIsReloading(true)
+      console.log('🔄 Starting WebRTC reload - keeping socket connection...')
+      
+      // Reset WebRTC connection states only
+      setIsWebRTCConnecting(false)
+      setHasConnectedPeers(false)
+      setPeersConnected(new Map())
+      
+      // Step 1: Clean up all peer connections only
+      console.log('🧹 Cleaning up peer connections...')
+      peersRef.current.forEach((peer, userId) => {
+        peer.close()
+      })
+      peersRef.current.clear()
+      
+      // Step 2: Clean up remote audio elements
+      console.log('🔊 Cleaning up remote audio elements...')
+      remoteAudiosRef.current.forEach(audio => {
+        if (audio.srcObject) {
+          audio.srcObject.getTracks().forEach(track => track.stop())
+        }
+        audio.remove()
+      })
+      remoteAudiosRef.current.clear()
+      
+      // Step 3: Wait a moment for cleanup to complete
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Step 4: Recreate WebRTC connections with existing users
+      if (socketRef.current && socketConnected && connectedUsers.length > 0) {
+        console.log('🚀 Recreating WebRTC connections...')
+        
+        // Set connecting state if there are other users
+        const otherUsers = connectedUsers.filter(user => user.id !== socketRef.current.id)
+        if (otherUsers.length > 0 && streamRef.current) {
+          setIsWebRTCConnecting(true)
+        }
+        
+        // Recreate peer connections for existing users (excluding self)
+        connectedUsers.forEach(user => {
+          if (user.id !== socketRef.current.id && streamRef.current) {
+            console.log(`🔄 Recreating connection with ${user.userName}`)
+            createPeerConnection(user.id, user.userName, true)
+          }
+        })
+      }
+      
+      console.log('✅ WebRTC reload completed successfully!')
+      
+    } catch (error) {
+      console.error('❌ WebRTC reload failed:', error)
+      setConnectionError('การรีโหลด WebRTC ล้มเหลว - ลองอีกครั้ง')
+    } finally {
+      setIsReloading(false)
+    }
+  }
+
   if (isConnecting) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -725,18 +812,52 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         <button
           onClick={toggleMute}
           className={`px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
-            isMuted 
-              ? 'bg-red-600 hover:bg-red-700' 
-              : 'bg-green-600 hover:bg-green-700'
+            isWebRTCConnecting
+              ? 'bg-yellow-600 hover:bg-yellow-700 cursor-wait'
+              : isMuted 
+                ? 'bg-red-600 hover:bg-red-700' 
+                : 'bg-green-600 hover:bg-green-700'
           }`}
-          disabled={!streamRef.current}
+          disabled={!streamRef.current || isWebRTCConnecting}
         >
-          <span className="text-xl">
-            {isMuted ? '🔇' : '🎤'}
-          </span>
-          <span>
-            {isMuted ? 'เปิดไมค์' : 'ปิดไมค์'}
-          </span>
+          {isWebRTCConnecting ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+              <span>กำลังเชื่อมต่อ WebRTC...</span>
+            </>
+          ) : (
+            <>
+              <span className="text-xl">
+                {isMuted ? '🔇' : '🎤'}
+              </span>
+              <span>
+                {isMuted ? 'เปิดไมค์' : 'ปิดไมค์'}
+              </span>
+            </>
+          )}
+        </button>
+
+        <button
+          onClick={reloadWebRTCConnection}
+          className={`px-4 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
+            isReloading
+              ? 'bg-orange-600 cursor-wait'
+              : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+          disabled={isReloading}
+          title="รีโหลดการเชื่อมต่อ WebRTC"
+        >
+          {isReloading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <span className="text-sm">รีโหลด...</span>
+            </>
+          ) : (
+            <>
+              <span className="text-lg">🔄</span>
+              <span className="text-sm">รีโหลด WebRTC</span>
+            </>
+          )}
         </button>
 
         <div className="bg-gray-700 px-4 py-3 rounded-lg flex items-center space-x-2">
@@ -744,6 +865,11 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           <span className="text-sm">
             {socketConnected ? `เชื่อมต่อ: ${connectedUsers.length} คน` : 'Demo Mode'}
           </span>
+          {isWebRTCConnecting && (
+            <span className="text-xs text-yellow-400 ml-2">
+              (กำลังเชื่อมต่อเสียง...)
+            </span>
+          )}
         </div>
       </div>
     </div>
