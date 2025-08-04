@@ -168,11 +168,14 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       // Try to load socket.io dynamically
       const io = await import('socket.io-client').then(module => module.default || module)
       
-      // Initialize socket connection with Railway URL
+      // Initialize socket connection with Railway URL and better configuration
       socketRef.current = io('https://sweet-virtual-space-production.up.railway.app', {
-        timeout: 5000,
+        timeout: 10000,
         forceNew: true,
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        upgrade: true,
+        rememberUpgrade: true,
+        withCredentials: true
       })
       
       // Set up timeout to fallback to demo mode
@@ -182,18 +185,20 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           setConnectionError('เซิร์ฟเวอร์ไม่พร้อมใช้งาน - ใช้โหมด Demo')
           initializeMockRoom()
         }
-      }, 8000)
+      }, 12000)
 
       setupSocketListeners(connectionTimeout)
       
       // Try to get user media with detailed error handling
       await initializeMicrophone()
       
-      // Join room
-      socketRef.current.emit('join-room', { roomId, userName })
+      // Join room after connection is established
+      if (socketRef.current) {
+        socketRef.current.emit('join-room', { roomId, userName })
+      }
       
     } catch (error) {
-      console.log('Initializing Demo Mode due to connection issue')
+      console.log('Initializing Demo Mode due to connection issue:', error)
       setConnectionError('เซิร์ฟเวอร์ไม่พร้อมใช้งาน - ใช้โหมด Demo')
       initializeMockRoom()
     }

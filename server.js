@@ -5,16 +5,33 @@ import cors from 'cors';
 
 const app = express();
 const server = createServer(app);
+
+// Configure Socket.IO with better settings for Railway
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    methods: ["GET", "POST"]
-  }
+    origin: "*", // Allow all origins for now
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  allowEIO3: true,
+  transports: ['websocket', 'polling']
 });
 
+// Configure CORS for Express
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173"
+  origin: "*", // Allow all origins for now
+  credentials: true
 }));
+
+// Add health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Basic route for testing
+app.get('/', (req, res) => {
+  res.json({ message: 'Virtual Space Server is running!', timestamp: new Date().toISOString() });
+});
 
 // Store room information
 const rooms = new Map();
