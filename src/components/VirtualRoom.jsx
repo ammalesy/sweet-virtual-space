@@ -168,9 +168,9 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       // Try to load socket.io dynamically
       const io = await import('socket.io-client').then(module => module.default || module)
       
-      // Initialize socket connection with shorter timeout
-      socketRef.current = io('http://localhost:3001', {
-        timeout: 2000,
+      // Initialize socket connection with Railway URL
+      socketRef.current = io('https://sweet-virtual-space-production.up.railway.app', {
+        timeout: 5000,
         forceNew: true,
         transports: ['websocket', 'polling']
       })
@@ -182,7 +182,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           setConnectionError('เซิร์ฟเวอร์ไม่พร้อมใช้งาน - ใช้โหมด Demo')
           initializeMockRoom()
         }
-      }, 3000)
+      }, 8000)
 
       setupSocketListeners(connectionTimeout)
       

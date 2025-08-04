@@ -27,7 +27,7 @@ function Navbar() {
                   : 'text-gray-700 hover:text-blue-500 hover:bg-gray-100'
               }`}
             >
-              Channel
+              ช่องสื่อสาร
             </Link>
             <Link
               to="/virtual-space"
@@ -47,7 +47,7 @@ function Navbar() {
                   : 'text-gray-700 hover:text-blue-500 hover:bg-gray-100'
               }`}
             >
-              About Us
+              เกี่ยวกับเรา
             </Link>
           </div>
         </div>
