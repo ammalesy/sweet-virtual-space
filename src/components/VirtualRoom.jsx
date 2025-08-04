@@ -464,31 +464,37 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     socket.on('user-list', (users) => {
       console.log('Received user list:', users);
       
-      // Clear existing users first, then set new ones
-      setConnectedUsers([]);
+      // Use a more aggressive deduplication approach
+      const uniqueUsers = users.reduce((acc, user) => {
+        // Only add user if ID doesn't already exist
+        if (!acc.find(u => u.id === user.id)) {
+          acc.push(user);
+        }
+        return acc;
+      }, []);
       
-      // Use setTimeout to ensure state is cleared before setting new users
-      setTimeout(() => {
-        // Use Set to ensure unique users by ID
-        const uniqueUsers = Array.from(
-          new Map(users.map(user => [user.id, user])).values()
-        );
-        
-        console.log('Setting unique users:', uniqueUsers);
-        setConnectedUsers(uniqueUsers);
-        console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`);
-        
-        // Create peer connections for existing users (excluding self)
-        uniqueUsers.forEach(user => {
-          if (user.id !== socket.id && streamRef.current && !peersRef.current.has(user.id)) {
-            createPeerConnection(user.id, user.userName, true)
-          }
-        })
-      }, 0);
+      console.log('Setting unique users:', uniqueUsers);
+      
+      // Set users directly without async operations
+      setConnectedUsers(uniqueUsers);
+      console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`);
+      
+      // Create peer connections for existing users (excluding self)
+      uniqueUsers.forEach(user => {
+        if (user.id !== socket.id && streamRef.current && !peersRef.current.has(user.id)) {
+          createPeerConnection(user.id, user.userName, true)
+        }
+      })
     })
 
     socket.on('user-joined', (user) => {
       console.log('User joined event received:', user);
+      
+      // Ignore if it's our own user
+      if (user.id === socket.id) {
+        console.log('Ignoring own user join event');
+        return;
+      }
       
       setConnectedUsers(prev => {
         // Check if user already exists
@@ -505,7 +511,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       });
       
       // Create peer connection for new user (as receiver) only if not exists
-      if (streamRef.current && user.id !== socket.id && !peersRef.current.has(user.id)) {
+      if (streamRef.current && !peersRef.current.has(user.id)) {
         createPeerConnection(user.id, user.userName, false)
       }
     })
