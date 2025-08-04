@@ -212,6 +212,9 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       setIsConnecting(true)
       setConnectionError(null)
 
+      // Request user interaction for audio playback (required by browsers)
+      await requestAudioPermission()
+
       // Try to load socket.io dynamically
       const io = await import('socket.io-client').then(module => module.default || module)
       
@@ -250,6 +253,23 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     }
     
     setIsConnecting(false)
+  }
+
+  const requestAudioPermission = async () => {
+    try {
+      // Create a silent audio context to request audio permission
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume()
+        console.log('✅ Audio context resumed')
+      }
+      
+      await audioContext.close()
+      console.log('🔊 Audio permission requested')
+    } catch (error) {
+      console.log('Audio permission request failed:', error)
+    }
   }
 
   const initializeMicrophone = async () => {
