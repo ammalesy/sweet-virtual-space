@@ -97,16 +97,6 @@ io.on('connection', (socket) => {
     console.log(`${userName} joined room ${roomId}`);
   });
 
-  // Chat message
-  socket.on('chat-message', ({ roomId, message }) => {
-    io.to(roomId).emit('chat-message', {
-      id: Date.now() + Math.random(),
-      sender: socket.userName,
-      message: message,
-      timestamp: new Date().toLocaleTimeString('th-TH')
-    });
-  });
-
   // WebRTC signaling
   socket.on('webrtc-signal', ({ userId, roomId, signal }) => {
     socket.to(userId).emit('webrtc-signal', {

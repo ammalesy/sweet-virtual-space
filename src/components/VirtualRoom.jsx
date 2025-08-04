@@ -4,15 +4,12 @@ function VirtualRoom({ roomId, userName, onLeave }) {
   const [isMuted, setIsMuted] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectedUsers, setConnectedUsers] = useState([])
-  const [chatMessages, setChatMessages] = useState([])
-  const [newMessage, setNewMessage] = useState('')
   const [connectionError, setConnectionError] = useState(null)
   const [socketConnected, setSocketConnected] = useState(false)
   const [microphoneStatus, setMicrophoneStatus] = useState('requesting')
   const [audioLevel, setAudioLevel] = useState(0)
   const [peersConnected, setPeersConnected] = useState(new Map())
   
-  const chatRef = useRef()
   const socketRef = useRef()
   const streamRef = useRef()
   const audioContextRef = useRef()
@@ -82,7 +79,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       // Handle incoming remote stream
       peerConnection.ontrack = (event) => {
         const [remoteStream] = event.streams
-        addChatMessage('System', `🔊 เชื่อมต่อเสียงกับ ${userName} สำเร็จ`)
+        console.log(`🔊 เชื่อมต่อเสียงกับ ${userName} สำเร็จ`)
         
         // Create audio element for remote stream
         const audio = document.createElement('audio')
@@ -116,9 +113,9 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       // Handle connection state changes
       peerConnection.onconnectionstatechange = () => {
         if (peerConnection.connectionState === 'connected') {
-          addChatMessage('System', `✅ WebRTC เชื่อมต่อกับ ${userName} สำเร็จ`)
+          console.log(`✅ WebRTC เชื่อมต่อกับ ${userName} สำเร็จ`)
         } else if (peerConnection.connectionState === 'disconnected') {
-          addChatMessage('System', `🔇 ขาดการเชื่อมต่อกับ ${userName}`)
+          console.log(`🔇 ขาดการเชื่อมต่อกับ ${userName}`)
           
           // Cleanup
           if (remoteAudiosRef.current.has(userId)) {
@@ -156,7 +153,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       
     } catch (error) {
       console.error('Failed to create peer connection:', error)
-      addChatMessage('System', '❌ ไม่สามารถสร้างการเชื่อมต่อเสียงได้')
+      console.log('❌ ไม่สามารถสร้างการเชื่อมต่อเสียงได้')
     }
   }
 
@@ -208,7 +205,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
   const initializeMicrophone = async () => {
     try {
       setMicrophoneStatus('requesting')
-      addChatMessage('System', 'กำลังขอสิทธิ์เข้าถึงไมโครโฟน...')
+      console.log('กำลังขอสิทธิ์เข้าถึงไมโครโฟน...')
 
       const constraints = {
         audio: {
@@ -224,7 +221,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       streamRef.current = stream
       setMicrophoneStatus('granted')
       
-      addChatMessage('System', '✅ ไมโครโฟนพร้อมใช้งาน!')
+      console.log('✅ ไมโครโฟนพร้อมใช้งาน!')
       
       // Setup audio level monitoring
       setupAudioLevelMonitoring(stream)
@@ -246,7 +243,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         errorMessage = '❌ ไมโครโฟนถูกใช้งานโดยแอปอื่น'
       }
       
-      addChatMessage('System', errorMessage)
+      console.log(errorMessage)
     }
   }
 
@@ -275,7 +272,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
   }
 
   const testAudioPlayback = () => {
-    addChatMessage('System', '🔊 ระบบเสียงพร้อมใช้งาน')
+    console.log('🔊 ระบบเสียงพร้อมใช้งาน')
   }
 
   const initializeMockRoom = () => {
@@ -285,8 +282,8 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       { id: 'mock-2', userName: 'Demo User' }
     ])
     
-    addChatMessage('System', 'กำลังใช้งานในโหมด Demo (ไม่มี server)')
-    addChatMessage('System', 'เริ่ม WebSocket server เพื่อใช้งานจริง')
+    console.log('กำลังใช้งานในโหมด Demo (ไม่มี server)')
+    console.log('เริ่ม WebSocket server เพื่อใช้งานจริง')
   }
 
   const setupSocketListeners = (connectionTimeout) => {
@@ -297,7 +294,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       setSocketConnected(true)
       setConnectionError(null)
       console.log('✅ Connected to WebSocket server')
-      addChatMessage('System', '🟢 เชื่อมต่อ WebSocket server สำเร็จ!')
+      console.log('🟢 เชื่อมต่อ WebSocket server สำเร็จ!')
       
       // Join room after successful connection
       socket.emit('join-room', { roomId, userName })
@@ -306,7 +303,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     socket.on('disconnect', () => {
       setSocketConnected(false)
       console.log('❌ Disconnected from server')
-      addChatMessage('System', '🔴 ขาดการเชื่อมต่อ server')
+      console.log('🔴 ขาดการเชื่อมต่อ server')
     })
 
     socket.on('connect_error', (error) => {
@@ -322,7 +319,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         arr.findIndex(u => u.id === user.id) === index
       )
       setConnectedUsers(uniqueUsers)
-      addChatMessage('System', `ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`)
+      console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`)
       
       // Create peer connections for existing users (excluding self)
       uniqueUsers.forEach(user => {
@@ -340,7 +337,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         }
         return [...prev, user]
       })
-      addChatMessage('System', `${user.userName} เข้าร่วมห้อง`)
+      console.log(`${user.userName} เข้าร่วมห้อง`)
       
       // Create peer connection for new user (as receiver)
       if (streamRef.current) {
@@ -350,11 +347,11 @@ function VirtualRoom({ roomId, userName, onLeave }) {
 
     socket.on('user-left', (user) => {
       setConnectedUsers(prev => prev.filter(u => u.id !== user.id))
-      addChatMessage('System', `${user.userName} ออกจากห้อง`)
+      console.log(`${user.userName} ออกจากห้อง`)
       
       // Clean up peer connection
       if (peersRef.current.has(user.id)) {
-        peersRef.current.get(user.id).close() // Changed from destroy() to close()
+        peersRef.current.get(user.id).close()
         peersRef.current.delete(user.id)
       }
       
@@ -370,10 +367,6 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         updated.delete(user.id)
         return updated
       })
-    })
-
-    socket.on('chat-message', (message) => {
-      setChatMessages(prev => [...prev, message])
     })
 
     // WebRTC signaling
@@ -413,7 +406,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       const audioTrack = streamRef.current.getAudioTracks()[0]
       if (audioTrack) {
         audioTrack.enabled = isMuted
-        addChatMessage('System', `🎤 ไมโครโฟน${isMuted ? 'เปิด' : 'ปิด'}แล้ว`)
+        console.log(`🎤 ไมโครโฟน${isMuted ? 'เปิด' : 'ปิด'}แล้ว`)
       }
     }
 
@@ -427,32 +420,6 @@ function VirtualRoom({ roomId, userName, onLeave }) {
 
   const requestMicrophoneAccess = async () => {
     await initializeMicrophone()
-  }
-
-  const addChatMessage = (sender, message) => {
-    setChatMessages(prev => [...prev, {
-      id: Date.now() + Math.random(),
-      sender,
-      message,
-      timestamp: new Date().toLocaleTimeString('th-TH')
-    }])
-  }
-
-  const sendMessage = (e) => {
-    e.preventDefault()
-    if (!newMessage.trim()) return
-
-    if (socketRef.current && socketConnected) {
-      socketRef.current.emit('chat-message', {
-        roomId,
-        message: newMessage
-      })
-    } else {
-      // Mock chat in demo mode
-      addChatMessage(userName, newMessage)
-    }
-    
-    setNewMessage('')
   }
 
   const leaveRoom = () => {
@@ -501,134 +468,85 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main Virtual Space Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Virtual Space Canvas */}
-          <div className="flex-1 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative overflow-hidden">
-            {/* User Avatars */}
-            <div className="absolute inset-0 p-8">
-              {connectedUsers.map((user, index) => {
-                const isMe = user.userName === userName
-                
-                return (
-                  <div
-                    key={user.id}
-                    className="absolute"
-                    style={{
-                      left: `${20 + index * 150}px`,
-                      top: `${150 + index * 50}px`
-                    }}
-                  >
-                    <div className="flex flex-col items-center">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl ${
-                        isMe ? 'bg-green-600' : 'bg-blue-600'
-                      } ${!isMuted && streamRef.current ? 'ring-4 ring-green-400 animate-pulse' : ''}`}>
-                        👤
-                      </div>
-                      <div className="mt-2 bg-black bg-opacity-50 px-2 py-1 rounded text-sm">
-                        {user.userName}
-                        {isMe && (
-                          <span className="ml-1 text-green-400">(You)</span>
-                        )}
-                      </div>
-                      {isMe && (
-                        <div className="mt-1 text-xs">
-                          {isMuted ? (
-                            <span className="text-red-400">🔇 Muted</span>
-                          ) : (
-                            <span className="text-green-400">🎤 Active</span>
-                          )}
-                        </div>
+      {/* Main Virtual Space Area */}
+      <div className="flex-1 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative overflow-hidden">
+        {/* User Avatars */}
+        <div className="absolute inset-0 p-8">
+          {connectedUsers.map((user, index) => {
+            const isMe = user.userName === userName
+            
+            return (
+              <div
+                key={user.id}
+                className="absolute"
+                style={{
+                  left: `${20 + index * 150}px`,
+                  top: `${150 + index * 50}px`
+                }}
+              >
+                <div className="flex flex-col items-center">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl ${
+                    isMe ? 'bg-green-600' : 'bg-blue-600'
+                  } ${!isMuted && streamRef.current ? 'ring-4 ring-green-400 animate-pulse' : ''}`}>
+                    👤
+                  </div>
+                  <div className="mt-2 bg-black bg-opacity-50 px-2 py-1 rounded text-sm">
+                    {user.userName}
+                    {isMe && (
+                      <span className="ml-1 text-green-400">(You)</span>
+                    )}
+                  </div>
+                  {isMe && (
+                    <div className="mt-1 text-xs">
+                      {isMuted ? (
+                        <span className="text-red-400">🔇 Muted</span>
+                      ) : (
+                        <span className="text-green-400">🎤 Active</span>
                       )}
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Instructions */}
-            <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 p-4 rounded-lg max-w-sm">
-              <h3 className="font-semibold mb-2">การใช้งาน Virtual Space</h3>
-              <ul className="text-sm space-y-1 text-gray-300">
-                <li>• เริ่ม server: <code className="bg-gray-800 px-1 rounded">node server.js</code></li>
-                <li>• แชทกับผู้ใช้อื่นๆ ได้</li>
-                <li>• เปิด 2 browser เพื่อทดสอบ</li>
-                <li>• ใช้ไมโครโฟนเมื่อเชื่อมต่อ server แล้ว</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Audio Controls */}
-          <div className="bg-gray-800 p-4 flex justify-center space-x-4">
-            <button
-              onClick={toggleMute}
-              className={`px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
-                isMuted 
-                  ? 'bg-red-600 hover:bg-red-700' 
-                  : 'bg-green-600 hover:bg-green-700'
-              }`}
-              disabled={!streamRef.current}
-            >
-              <span className="text-xl">
-                {isMuted ? '🔇' : '🎤'}
-              </span>
-              <span>
-                {isMuted ? 'เปิดไมค์' : 'ปิดไมค์'}
-              </span>
-            </button>
-
-            <div className="bg-gray-700 px-4 py-3 rounded-lg flex items-center space-x-2">
-              <span className="text-xl">🌐</span>
-              <span className="text-sm">
-                {socketConnected ? `เชื่อมต่อ: ${connectedUsers.length} คน` : 'Demo Mode'}
-              </span>
-            </div>
-          </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
-        {/* Chat Panel */}
-        <div className="w-80 bg-gray-800 flex flex-col">
-          <div className="p-4 border-b border-gray-700">
-            <h3 className="font-semibold">
-              แชท {socketConnected ? '(Real-time)' : '(Demo)'}
-            </h3>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={chatRef}>
-            {chatMessages.map((msg) => (
-              <div key={msg.id} className="text-sm">
-                <div className="flex items-baseline space-x-2">
-                  <span className={`font-medium ${
-                    msg.sender === 'System' ? 'text-yellow-400' :
-                    msg.sender === userName ? 'text-green-400' : 'text-blue-400'
-                  }`}>
-                    {msg.sender}
-                  </span>
-                  <span className="text-gray-500 text-xs">{msg.timestamp}</span>
-                </div>
-                <p className="text-gray-300 mt-1">{msg.message}</p>
-              </div>
-            ))}
-          </div>
-          
-          <form onSubmit={sendMessage} className="p-4 border-t border-gray-700">
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="พิมพ์ข้อความ..."
-                className="flex-1 px-3 py-2 bg-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
-              >
-                ส่ง
-              </button>
-            </div>
-          </form>
+        {/* Instructions */}
+        <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 p-4 rounded-lg max-w-sm">
+          <h3 className="font-semibold mb-2">การใช้งาน Virtual Space</h3>
+          <ul className="text-sm space-y-1 text-gray-300">
+            <li>• พูดคุยด้วยเสียงแบบเรียลไทม์</li>
+            <li>• เปิด 2 browser เพื่อทดสอบ</li>
+            <li>• ใช้ไมโครโฟนเมื่อเชื่อมต่อ server แล้ว</li>
+            <li>• กดปุ่มเปิด/ปิดไมค์เพื่อควบคุมเสียง</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Audio Controls */}
+      <div className="bg-gray-800 p-4 flex justify-center space-x-4">
+        <button
+          onClick={toggleMute}
+          className={`px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
+            isMuted 
+              ? 'bg-red-600 hover:bg-red-700' 
+              : 'bg-green-600 hover:bg-green-700'
+          }`}
+          disabled={!streamRef.current}
+        >
+          <span className="text-xl">
+            {isMuted ? '🔇' : '🎤'}
+          </span>
+          <span>
+            {isMuted ? 'เปิดไมค์' : 'ปิดไมค์'}
+          </span>
+        </button>
+
+        <div className="bg-gray-700 px-4 py-3 rounded-lg flex items-center space-x-2">
+          <span className="text-xl">🌐</span>
+          <span className="text-sm">
+            {socketConnected ? `เชื่อมต่อ: ${connectedUsers.length} คน` : 'Demo Mode'}
+          </span>
         </div>
       </div>
     </div>
