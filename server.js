@@ -67,13 +67,32 @@ io.on('connection', (socket) => {
 
   // Join room
   socket.on('join-room', ({ roomId, userName }) => {
+    // Prevent duplicate joins from same socket
+    if (socket.currentRoomId === roomId) {
+      console.log(`Socket ${socket.id} already in room ${roomId}, ignoring duplicate join`);
+      return;
+    }
+
+    // Leave previous room if exists
+    if (socket.currentRoomId) {
+      const prevRoom = rooms.get(socket.currentRoomId);
+      if (prevRoom && prevRoom.has(socket.id)) {
+        prevRoom.delete(socket.id);
+        socket.to(socket.currentRoomId).emit('user-left', {
+          id: socket.id,
+          userName: socket.userName
+        });
+      }
+    }
+
     socket.join(roomId);
     socket.userName = userName;
     socket.roomId = roomId;
+    socket.currentRoomId = roomId; // Track current room
 
     // Initialize room if it doesn't exist
     if (!rooms.has(roomId)) {
-      rooms.set(roomId, new Map()); // Use Map instead of Set for better user management
+      rooms.set(roomId, new Map());
     }
 
     const room = rooms.get(roomId);

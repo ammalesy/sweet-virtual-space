@@ -426,14 +426,23 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       console.log('✅ Connected to WebSocket server')
       console.log('🟢 เชื่อมต่อ WebSocket server สำเร็จ!')
       
-      // Join room after successful connection
-      socket.emit('join-room', { roomId, userName })
+      // Only join room once per socket connection
+      if (!socket.hasJoinedRoom) {
+        console.log('📞 Joining room for the first time...')
+        socket.emit('join-room', { roomId, userName })
+        socket.hasJoinedRoom = true
+      }
     })
 
     socket.on('disconnect', () => {
       setSocketConnected(false)
       console.log('❌ Disconnected from server')
       console.log('🔴 ขาดการเชื่อมต่อ server')
+      
+      // Reset join room flag on disconnect
+      if (socket) {
+        socket.hasJoinedRoom = false
+      }
     })
 
     socket.on('connect_error', (error) => {
