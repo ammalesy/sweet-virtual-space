@@ -444,15 +444,14 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     })
 
     socket.on('user-list', (users) => {
-      // Remove duplicates and ensure unique users
-      const uniqueUsers = users.filter((user, index, arr) => 
-        arr.findIndex(u => u.id === user.id) === index
-      )
-      setConnectedUsers(uniqueUsers)
-      console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`)
+      console.log('Received user list:', users);
+      
+      // Set users directly without filtering since server now handles duplicates
+      setConnectedUsers(users);
+      console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${users.length} คน`);
       
       // Create peer connections for existing users (excluding self)
-      uniqueUsers.forEach(user => {
+      users.forEach(user => {
         if (user.id !== socket.id && streamRef.current) {
           createPeerConnection(user.id, user.userName, true)
         }
@@ -460,14 +459,19 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     })
 
     socket.on('user-joined', (user) => {
+      console.log('User joined:', user);
+      
       setConnectedUsers(prev => {
-        // Check if user already exists to prevent duplicates
-        if (prev.find(u => u.id === user.id)) {
-          return prev
+        // Double check to prevent duplicates on client side
+        const userExists = prev.find(u => u.id === user.id);
+        if (userExists) {
+          console.log('User already exists in list, skipping');
+          return prev;
         }
-        return [...prev, user]
-      })
-      console.log(`${user.userName} เข้าร่วมห้อง`)
+        
+        console.log(`${user.userName} เข้าร่วมห้อง`);
+        return [...prev, user];
+      });
       
       // Create peer connection for new user (as receiver)
       if (streamRef.current) {
@@ -476,27 +480,16 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     })
 
     socket.on('user-left', (user) => {
-      setConnectedUsers(prev => prev.filter(u => u.id !== user.id))
-      console.log(`${user.userName} ออกจากห้อง`)
+      console.log('User left:', user);
       
-      // Clean up peer connection
-      if (peersRef.current.has(user.id)) {
-        peersRef.current.get(user.id).close()
-        peersRef.current.delete(user.id)
-      }
+      setConnectedUsers(prev => {
+        const newUsers = prev.filter(u => u.id !== user.id);
+        console.log(`${user.userName} ออกจากห้อง`);
+        return newUsers;
+      });
       
-      // Clean up remote audio
-      if (remoteAudiosRef.current.has(user.id)) {
-        const audio = remoteAudiosRef.current.get(user.id)
-        audio.remove()
-        remoteAudiosRef.current.delete(user.id)
-      }
-      
-      setPeersConnected(prev => {
-        const updated = new Map(prev)
-        updated.delete(user.id)
-        return updated
-      })
+      // Clean up peer connection using the cleanup function
+      cleanupPeerConnection(user.id);
     })
 
     // WebRTC signaling

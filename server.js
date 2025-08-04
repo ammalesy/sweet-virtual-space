@@ -73,17 +73,24 @@ io.on('connection', (socket) => {
 
     // Initialize room if it doesn't exist
     if (!rooms.has(roomId)) {
-      rooms.set(roomId, new Set());
+      rooms.set(roomId, new Map()); // Use Map instead of Set for better user management
+    }
+
+    const room = rooms.get(roomId);
+    
+    // Remove any existing user with same socket ID (reconnection case)
+    if (room.has(socket.id)) {
+      room.delete(socket.id);
     }
 
     // Add user to room
-    rooms.get(roomId).add({
+    room.set(socket.id, {
       id: socket.id,
       userName: userName
     });
 
-    // Get current users in room
-    const roomUsers = Array.from(rooms.get(roomId));
+    // Get current users in room as array
+    const roomUsers = Array.from(room.values());
 
     // Send user list to new user
     socket.emit('user-list', roomUsers);
@@ -94,7 +101,7 @@ io.on('connection', (socket) => {
       userName: userName
     });
 
-    console.log(`${userName} joined room ${roomId}`);
+    console.log(`${userName} joined room ${roomId}. Total users: ${roomUsers.length}`);
   });
 
   // WebRTC signaling
@@ -119,22 +126,26 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
 
     if (socket.roomId && rooms.has(socket.roomId)) {
-      const roomUsers = rooms.get(socket.roomId);
-      roomUsers.forEach(user => {
-        if (user.id === socket.id) {
-          roomUsers.delete(user);
-        }
-      });
-
-      // Notify others about user leaving
-      socket.to(socket.roomId).emit('user-left', {
-        id: socket.id,
-        userName: socket.userName
-      });
+      const room = rooms.get(socket.roomId);
+      
+      // Remove user from room
+      if (room.has(socket.id)) {
+        const user = room.get(socket.id);
+        room.delete(socket.id);
+        
+        // Notify others about user leaving
+        socket.to(socket.roomId).emit('user-left', {
+          id: socket.id,
+          userName: user.userName
+        });
+        
+        console.log(`${user.userName} left room ${socket.roomId}. Remaining users: ${room.size}`);
+      }
 
       // Clean up empty rooms
-      if (roomUsers.size === 0) {
+      if (room.size === 0) {
         rooms.delete(socket.roomId);
+        console.log(`Room ${socket.roomId} deleted (empty)`);
       }
     }
   });
