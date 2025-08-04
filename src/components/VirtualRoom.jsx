@@ -74,8 +74,15 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun.googleapis.com:19302' }
-        ]
+          { urls: 'stun:stun.googleapis.com:19302' },
+          // Add free TURN servers for better connectivity
+          {
+            urls: 'turn:relay1.expressturn.com:3478',
+            username: 'efWOQV86PWBV8ZJSQY',
+            credential: 'nNuBJNDkEinuOhGFzDq2'
+          }
+        ],
+        iceCandidatePoolSize: 10
       })
 
       // Store peer connection immediately to prevent race conditions
@@ -165,25 +172,40 @@ function VirtualRoom({ roomId, userName, onLeave }) {
           console.log(`🔇 ขาดการเชื่อมต่อกับ ${userName}`)
           
           // Cleanup
-          if (remoteAudiosRef.current.has(userId)) {
-            const audio = remoteAudiosRef.current.get(userId)
-            audio.remove()
-            remoteAudiosRef.current.delete(userId)
-          }
-          
-          setPeersConnected(prev => {
-            const updated = new Map(prev)
-            updated.delete(userId)
-            return updated
-          })
+          cleanupPeerConnection(userId)
         } else if (peerConnection.connectionState === 'failed') {
           console.error(`❌ WebRTC connection failed with ${userName}`)
+          
+          // Try to restart ICE connection
+          console.log(`🔄 Attempting to restart ICE connection with ${userName}`)
+          peerConnection.restartIce()
+          
+          // If restart fails, cleanup and try to recreate connection
+          setTimeout(() => {
+            if (peerConnection.connectionState === 'failed') {
+              console.log(`🔄 Recreating connection with ${userName}`)
+              cleanupPeerConnection(userId)
+              
+              // Attempt to recreate peer connection
+              setTimeout(() => {
+                if (streamRef.current) {
+                  createPeerConnection(userId, userName, true)
+                }
+              }, 2000)
+            }
+          }, 5000)
         }
       }
 
       // Handle ICE connection state changes
       peerConnection.oniceconnectionstatechange = () => {
         console.log(`❄️ ICE connection state with ${userName}: ${peerConnection.iceConnectionState}`)
+        
+        if (peerConnection.iceConnectionState === 'failed') {
+          console.error(`❄️ ICE connection failed with ${userName}`)
+          // Try to restart ICE
+          peerConnection.restartIce()
+        }
       }
 
       // Create offer or wait for offer
@@ -217,6 +239,31 @@ function VirtualRoom({ roomId, userName, onLeave }) {
       if (peersRef.current.has(userId)) {
         peersRef.current.delete(userId)
       }
+    }
+  }
+
+  const cleanupPeerConnection = (userId) => {
+    console.log(`🧹 Cleaning up peer connection with ${userId}`)
+    
+    if (peersRef.current.has(userId)) {
+      const peerConnection = peersRef.current.get(userId)
+      
+      // Close the peer connection
+      peerConnection.close()
+      peersRef.current.delete(userId)
+      
+      // Remove remote audio element
+      if (remoteAudiosRef.current.has(userId)) {
+        const audio = remoteAudiosRef.current.get(userId)
+        audio.remove()
+        remoteAudiosRef.current.delete(userId)
+      }
+      
+      setPeersConnected(prev => {
+        const updated = new Map(prev)
+        updated.delete(userId)
+        return updated
+      })
     }
   }
 
