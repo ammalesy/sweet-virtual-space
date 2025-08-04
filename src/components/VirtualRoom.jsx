@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 
 function VirtualRoom({ roomId, userName, onLeave }) {
   const [isMuted, setIsMuted] = useState(false)
@@ -17,14 +17,22 @@ function VirtualRoom({ roomId, userName, onLeave }) {
   const audioLevelIntervalRef = useRef()
   const peersRef = useRef(new Map())
   const remoteAudiosRef = useRef(new Map())
+  const hasInitialized = useRef(false) // Add flag to prevent double initialization
 
   useEffect(() => {
+    // Prevent double initialization
+    if (hasInitialized.current) {
+      return
+    }
+    
+    hasInitialized.current = true
     initializeRoom()
     
     return () => {
       cleanup()
+      hasInitialized.current = false
     }
-  }, [roomId])
+  }, []) // Remove roomId dependency to prevent re-initialization
 
   const cleanup = () => {
     if (streamRef.current) {
@@ -417,7 +425,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     console.log('เริ่ม WebSocket server เพื่อใช้งานจริง')
   }
 
-  const setupSocketListeners = (connectionTimeout) => {
+  const setupSocketListeners = useCallback((connectionTimeout) => {
     const socket = socketRef.current
 
     socket.on('connect', () => {
@@ -456,41 +464,48 @@ function VirtualRoom({ roomId, userName, onLeave }) {
     socket.on('user-list', (users) => {
       console.log('Received user list:', users);
       
-      // Use Set to ensure unique users by ID, then convert back to array
-      const uniqueUsers = Array.from(
-        new Map(users.map(user => [user.id, user])).values()
-      );
+      // Clear existing users first, then set new ones
+      setConnectedUsers([]);
       
-      console.log('Unique users after dedup:', uniqueUsers);
-      setConnectedUsers(uniqueUsers);
-      console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`);
-      
-      // Create peer connections for existing users (excluding self)
-      uniqueUsers.forEach(user => {
-        if (user.id !== socket.id && streamRef.current) {
-          createPeerConnection(user.id, user.userName, true)
-        }
-      })
+      // Use setTimeout to ensure state is cleared before setting new users
+      setTimeout(() => {
+        // Use Set to ensure unique users by ID
+        const uniqueUsers = Array.from(
+          new Map(users.map(user => [user.id, user])).values()
+        );
+        
+        console.log('Setting unique users:', uniqueUsers);
+        setConnectedUsers(uniqueUsers);
+        console.log(`ยินดีต้อนรับสู่ Virtual Space! มีผู้ใช้ ${uniqueUsers.length} คน`);
+        
+        // Create peer connections for existing users (excluding self)
+        uniqueUsers.forEach(user => {
+          if (user.id !== socket.id && streamRef.current && !peersRef.current.has(user.id)) {
+            createPeerConnection(user.id, user.userName, true)
+          }
+        })
+      }, 0);
     })
 
     socket.on('user-joined', (user) => {
       console.log('User joined event received:', user);
       
       setConnectedUsers(prev => {
-        // Create a Map to remove duplicates by user ID
-        const userMap = new Map(prev.map(u => [u.id, u]));
+        // Check if user already exists
+        const userExists = prev.find(u => u.id === user.id);
+        if (userExists) {
+          console.log('User already exists, ignoring join event');
+          return prev;
+        }
         
-        // Add the new user (will overwrite if duplicate ID exists)
-        userMap.set(user.id, user);
-        
-        const newUsers = Array.from(userMap.values());
+        const newUsers = [...prev, user];
         console.log('Updated user list:', newUsers.map(u => `${u.userName}(${u.id})`));
         
         return newUsers;
       });
       
-      // Create peer connection for new user (as receiver)
-      if (streamRef.current && user.id !== socket.id) {
+      // Create peer connection for new user (as receiver) only if not exists
+      if (streamRef.current && user.id !== socket.id && !peersRef.current.has(user.id)) {
         createPeerConnection(user.id, user.userName, false)
       }
     })
@@ -571,7 +586,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         console.error(`❌ WebRTC signaling error with ${userId}:`, error)
       }
     })
-  }
+  }, [roomId, userName]) // Add dependencies
 
   const toggleMute = () => {
     setIsMuted(!isMuted)
