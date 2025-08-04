@@ -398,7 +398,7 @@ function VirtualRoom({ roomId, userName, onLeave }) {
         } else if (signal.type === 'answer') {
           await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp))
         } else if (signal.type === 'ice-candidate') {
-          await peerConnection.addIceCandidate(new RTCiceCandidate(signal.candidate))
+          await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate))
         }
       } catch (error) {
         console.error('WebRTC signaling error:', error)
